@@ -1,0 +1,22 @@
+[package]
+name = "template-compiler"
+description = "A compiler from a simple template language to Wasm components"
+keywords = ["compiler", "webassembly", "wasm"]
+categories = ["compilers", "parser-implementations", "template-engine", "wasm"]
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+
+version = "0.1.0"
+edition = "2021"
+authors = ["Kyle Brown"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.68"
+clap = { version = "4.0.32", features = ["derive"] }
+wasm-encoder = "0.20.0"
+
+[dev-dependencies]
+wasmprinter = "0.2.45"
+wasmtime = { version = "4.0.0", features = ["component-model"]}
