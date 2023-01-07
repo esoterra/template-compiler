@@ -1,4 +1,4 @@
-use std::{path::PathBuf, fs};
+use std::{fs, path::PathBuf};
 
 pub struct FileData {
     pub name: String,
@@ -6,8 +6,8 @@ pub struct FileData {
 }
 
 pub fn parse_file(path: PathBuf) -> FileData {
-    FileData { 
+    FileData {
         name: path.file_name().unwrap().to_str().unwrap().into(),
-        contents: fs::read_to_string(path).unwrap()
+        contents: fs::read_to_string(path).unwrap(),
     }
 }

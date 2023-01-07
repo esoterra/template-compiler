@@ -1,4 +1,7 @@
-use wasm_encoder::{Module, TypeSection, ValType, FunctionSection, ExportSection, ExportKind, CodeSection, Function, Instruction, MemorySection, MemoryType, DataSection, ConstExpr};
+use wasm_encoder::{
+    CodeSection, ConstExpr, DataSection, ExportKind, ExportSection, Function, FunctionSection,
+    Instruction, MemorySection, MemoryType, Module, TypeSection, ValType,
+};
 
 use crate::{parse::FileData, Config};
 
@@ -8,9 +11,15 @@ pub fn gen_module(config: &Config, file_data: &FileData) -> Module {
     // Create a type entry for the `apply` function's type
     let TypeInfo { types, type_index } = gen_types();
     // Create a function entry for the `apply` function
-    let FunctionInfo { functions, function_index } = gen_functions(type_index);
+    let FunctionInfo {
+        functions,
+        function_index,
+    } = gen_functions(type_index);
     // Generate a memory section with enough room for the static data
-    let MemoryInfo { memories, memory_index } = gen_memories(&layout);
+    let MemoryInfo {
+        memories,
+        memory_index,
+    } = gen_memories(&layout);
     // Generate a code section that returns a pointer into the return area
     let codes = gen_codes(&layout);
     // Generate a data section with the static data
@@ -50,12 +59,16 @@ fn calculate_layout(file_data: &FileData) -> MemoryLayout {
     const PAGE_SIZE: u64 = 1 << 16;
     let pages_needed = div_ceil(memory_needed, PAGE_SIZE);
 
-    MemoryLayout { return_area_offset, template_data_offset, pages_needed }
+    MemoryLayout {
+        return_area_offset,
+        template_data_offset,
+        pages_needed,
+    }
 }
 
 struct TypeInfo {
     types: TypeSection,
-    type_index: u32
+    type_index: u32,
 }
 
 fn gen_types() -> TypeInfo {
@@ -72,7 +85,7 @@ fn gen_types() -> TypeInfo {
 
 struct FunctionInfo {
     functions: FunctionSection,
-    function_index: u32
+    function_index: u32,
 }
 
 fn gen_functions(type_index: u32) -> FunctionInfo {
@@ -80,7 +93,7 @@ fn gen_functions(type_index: u32) -> FunctionInfo {
     functions.function(type_index);
     FunctionInfo {
         functions,
-        function_index: 0
+        function_index: 0,
     }
 }
 
@@ -93,7 +106,7 @@ fn gen_exports(config: &Config, function_index: u32, memory_index: u32) -> Expor
 
 struct MemoryInfo {
     memories: MemorySection,
-    memory_index: u32
+    memory_index: u32,
 }
 
 fn gen_memories(layout: &MemoryLayout) -> MemoryInfo {
@@ -106,7 +119,7 @@ fn gen_memories(layout: &MemoryLayout) -> MemoryInfo {
     });
     MemoryInfo {
         memories,
-        memory_index: 0
+        memory_index: 0,
     }
 }
 
@@ -126,9 +139,17 @@ fn gen_data(file_data: &FileData, memory_index: u32, layout: &MemoryLayout) -> D
     let result_start: u32 = 8;
     let result_len = file_data.contents.len() as u32;
     let return_area = [result_start.to_le_bytes(), result_len.to_le_bytes()].concat();
-    data.active(memory_index, &ConstExpr::i32_const(layout.return_area_offset as i32), return_area);
+    data.active(
+        memory_index,
+        &ConstExpr::i32_const(layout.return_area_offset as i32),
+        return_area,
+    );
 
-    data.active(memory_index, &ConstExpr::i32_const(layout.template_data_offset as i32), file_data.contents.bytes());
+    data.active(
+        memory_index,
+        &ConstExpr::i32_const(layout.template_data_offset as i32),
+        file_data.contents.bytes(),
+    );
 
     data
 }

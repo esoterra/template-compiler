@@ -1,4 +1,8 @@
-use wasm_encoder::{Component, ModuleSection, InstanceSection, ComponentTypeSection, ComponentValType, PrimitiveValType, ComponentAliasSection, ExportKind, ComponentExportSection, ComponentExportKind, CanonicalFunctionSection, CanonicalOption};
+use wasm_encoder::{
+    CanonicalFunctionSection, CanonicalOption, Component, ComponentAliasSection,
+    ComponentExportKind, ComponentExportSection, ComponentTypeSection, ComponentValType,
+    ExportKind, InstanceSection, ModuleSection, PrimitiveValType,
+};
 
 use crate::{parse::FileData, Config};
 
@@ -21,7 +25,8 @@ pub fn gen_component(config: &Config, file_data: &FileData) -> Component {
     component.section(&aliases);
 
     let mut types = ComponentTypeSection::new();
-    types.function()
+    types
+        .function()
         .params([] as [(&str, ComponentValType); 0])
         .result(ComponentValType::Primitive(PrimitiveValType::String));
     component.section(&types);

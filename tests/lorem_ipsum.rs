@@ -10,21 +10,24 @@ Praesent facilisis dolor diam, lacinia egestas diam vulputate eu. Vestibulum ant
 
 Suspendisse odio dui, finibus ut suscipit non, pulvinar ut purus. Phasellus quis gravida ligula, vel pharetra mauris. Proin vel arcu laoreet, cursus nisl ac, varius erat. Donec vel tempus tortor, at semper orci. Nam tincidunt egestas augue, vitae porta tellus porttitor ut. Aenean at est sit amet magna pellentesque pharetra eget eu massa. Vestibulum imperdiet lacus nec purus mollis sodales. Morbi placerat mauris a nunc pharetra, in faucibus quam ornare. Cras nec sapien eget mi vestibulum tempor vel sit amet risus. Curabitur nec dolor sed ligula efficitur ullamcorper. ";
 
-use template_compiler::{ Config as CompilerConfig, FileData, gen_component };
+use template_compiler::{gen_component, Config as CompilerConfig, FileData};
 
 use anyhow::Result;
 
-use wasmtime::{Engine, Config, Store, component::{Component, Linker, TypedFunc}};
+use wasmtime::{
+    component::{Component, Linker, TypedFunc},
+    Config, Engine, Store,
+};
 
 #[test]
 fn test_lorem_ipsum() -> Result<()> {
     let compiler_config = CompilerConfig {
         export_func_name: "apply".into(),
-        export_mem_name: "mem".into()
+        export_mem_name: "mem".into(),
     };
     let file_data = FileData {
         name: "lorem-ipsum.txt".into(),
-        contents: LOREM_IPSUM.into()
+        contents: LOREM_IPSUM.into(),
     };
     let component = gen_component(&compiler_config, &file_data);
     let component_bytes = component.finish();
