@@ -1,5 +1,6 @@
 use std::{fs, path::PathBuf};
 
+use anyhow::Result;
 use clap::Parser;
 
 use template_compiler::{gen_component, parse_file, Config};
@@ -17,14 +18,16 @@ struct Args {
     export_name: Option<String>,
 }
 
-fn main() {
+fn main() -> Result<()> {
     let args = Args::parse();
     let config = Config {
         export_func_name: args.export_name.unwrap_or("apply".into()),
         export_mem_name: "mem".into(),
     };
 
-    let file_data = parse_file(args.input);
+    let file_data = parse_file(args.input)?;
     let component = gen_component(&config, &file_data);
-    fs::write(args.output, component.finish().as_slice()).unwrap();
+    fs::write(args.output, component.finish().as_slice())?;
+
+    Ok(())
 }
