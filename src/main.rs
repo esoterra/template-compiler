@@ -1,7 +1,8 @@
-use std::{fs, path::PathBuf};
+use std::{fs, path::PathBuf, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{Result, Context};
 use clap::Parser;
+use miette::NamedSource;
 
 use template_compiler::{gen_component, parse_file, Config};
 
@@ -22,10 +23,21 @@ fn main() -> Result<()> {
     let args = Args::parse();
     let config = Config {
         export_func_name: args.export_name.unwrap_or("apply".into()),
-        export_mem_name: "mem".into(),
     };
 
-    let file_data = parse_file(args.input)?;
+    let name: String = args
+        .input
+        .file_name()
+        .context("No file name found")?
+        .to_str()
+        .context("File name was not valid utf-8")?
+        .into();
+
+    let text = fs::read_to_string(args.input)?;
+
+    let source = Arc::new(NamedSource::new(name, text.clone()));
+
+    let file_data = parse_file(source, &text)?;
     let component = gen_component(&config, &file_data);
     fs::write(args.output, component.finish().as_slice())?;
 

@@ -15,8 +15,14 @@ authors = ["Kyle Brown"]
 [dependencies]
 anyhow = "1.0.68"
 clap = { version = "4.0.32", features = ["derive"] }
-wasm-encoder = "0.20.0"
+miette = { version = "5.5.0", features = ["fancy"] }
+thiserror = "1.0.38"
+wasm-encoder = "0.25.0"
+wat = "1.0.59"
+wit-parser = "0.6.1"
 
 [dev-dependencies]
 wasmprinter = "0.2.45"
-wasmtime = { version = "4.0.0", features = ["component-model"]}
+wasmtime = { version = "6.0.0", features = ["component-model"]}
+wasmtime-component-macro = "6.0"
+pretty_assertions = "1.1.0"
