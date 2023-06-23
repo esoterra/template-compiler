@@ -68,7 +68,8 @@ pub fn gen_component(config: &Config, file_data: &FileData) -> Component {
 
     // Export the component-level function
     let mut exports = ComponentExportSection::new();
-    exports.export(&config.export_func_name, "", ComponentExportKind::Func, 0, None);
+    exports.export("params", ComponentExportKind::Type, params_type_index, None);
+    exports.export(&config.export_func_name, ComponentExportKind::Func, 0, None);
     component.section(&exports);
 
     component
