@@ -18,9 +18,11 @@ use wasmtime_component_macro::bindgen;
 
 bindgen!({
     inline: "
-        default world template {
+        package template:lorem-ipsum
+
+        world template {
             record params {}
-        
+
             export apply: func(param: params) -> string
         }
     "
@@ -39,6 +41,9 @@ fn test_lorem_ipsum() -> Result<()> {
 
     let component = gen_component(&compiler_config, &file_data);
     let component_bytes = component.finish();
+
+    // let component_ast = wasmprinter::print_bytes(&component_bytes).unwrap();
+    // println!("{}", component_ast);
 
     let mut config = Config::new();
     config.wasm_component_model(true);

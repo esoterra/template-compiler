@@ -17,15 +17,18 @@ use wasmtime_component_macro::bindgen;
 
 bindgen!({
     inline: "
-        default world website {
+        package template:website
+
+        world website {
             record params {
                 content: string,
                 title: string,
             }
-        
+
             export apply: func(param: params) -> string
         }
-    "
+    ",
+
 });
 
 const TEMPLATE: &'static str = "
