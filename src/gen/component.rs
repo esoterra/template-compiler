@@ -41,7 +41,7 @@ pub fn gen_component(config: &Config, file_data: &FileData) -> Component {
     aliases.alias(Alias::CoreInstanceExport { instance: inner_module_index, kind:  ExportKind::Func, name: &config.export_func_name });
     component.section(&aliases);
 
-    // Define the component-level function type
+    // Define the component-level argument type
     let mut types = ComponentTypeSection::new();
     let converted_names: Vec<String> = params.iter().map(|param| {
         snake_to_kebab(param)
@@ -54,11 +54,21 @@ pub fn gen_component(config: &Config, file_data: &FileData) -> Component {
     );
     types.defined_type().record(fields);
     let params_type_index = 0;
+    component.section(&types);
+
+    // Export the component-level argument type
+    let mut exports = ComponentExportSection::new();
+    exports.export("params", ComponentExportKind::Type, params_type_index, None);
+    let params_export_index = 1;
+    component.section(&exports);
+
+    // Define the component-level function type
+    let mut types = ComponentTypeSection::new();
     types
         .function()
-        .params([("params", ComponentValType::Type(params_type_index))])
+        .params([("params", ComponentValType::Type(params_export_index))])
         .result(ComponentValType::Primitive(PrimitiveValType::String));
-    let apply_type_index = 1;
+    let apply_type_index = 2;
     component.section(&types);
 
     // Define the component-level function
@@ -68,7 +78,6 @@ pub fn gen_component(config: &Config, file_data: &FileData) -> Component {
 
     // Export the component-level function
     let mut exports = ComponentExportSection::new();
-    exports.export("params", ComponentExportKind::Type, params_type_index, None);
     exports.export(&config.export_func_name, ComponentExportKind::Func, 0, None);
     component.section(&exports);
 
