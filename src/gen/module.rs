@@ -1,24 +1,20 @@
 use wasm_encoder::{
-    CodeSection, DataSection, ExportKind, ExportSection, FunctionSection,
-    MemoryType, Module, TypeSection, ImportSection, EntityType, ValType, DataCountSection,
+    CodeSection, EntityType, ExportKind, ExportSection,
+    FunctionSection, ImportSection, MemoryType, Module, TypeSection, ValType,
 };
 
-use crate::{
-    parse::{FileData, Node},
-    Config,
-};
+use crate::Config;
 
 use super::template::TemplateGenerator;
 
-pub fn gen_module(config: &Config, file_data: &FileData, params: &Vec<&str>) -> Module {
-    let template = TemplateGenerator::new(params, file_data);
+pub fn gen_module(config: &Config, template: &TemplateGenerator) -> Module {
     // Create a type entry for the `apply` function's type
     let mut types = TypeSection::new();
     types.function(vec![ValType::I32; 4], vec![ValType::I32; 1]);
     let realloc_type_index = 0;
     types.function(vec![], vec![]);
     let clear_type_index = 1;
-    template.gen_type(&mut types);
+    template.gen_core_type(&mut types);
     let template_type_index = 2;
 
     // Create imports for the allocator memory, alloc, and clear
@@ -32,7 +28,11 @@ pub fn gen_module(config: &Config, file_data: &FileData, params: &Vec<&str>) -> 
     let memory_index = 0;
     imports.import("allocator", "memory", EntityType::Memory(memory_type));
     let realloc_func_index = 0;
-    imports.import("allocator", "realloc", EntityType::Function(realloc_type_index));
+    imports.import(
+        "allocator",
+        "realloc",
+        EntityType::Function(realloc_type_index),
+    );
     let clear_func_index = 1;
     imports.import("allocator", "clear", EntityType::Function(clear_type_index));
 
@@ -43,17 +43,21 @@ pub fn gen_module(config: &Config, file_data: &FileData, params: &Vec<&str>) -> 
 
     // Generate a code section that returns a pointer into the return area
     let mut codes = CodeSection::new();
-    codes.function(&template.gen_function());
+    codes.function(&template.gen_core_function());
 
     // Generate a data section with the static data
-    let (count, data) = gen_data(file_data);
+    let (count, data) = template.gen_data();
 
     // Create an export entry for the `apply` function
     let mut exports = ExportSection::new();
     exports.export("memory", ExportKind::Memory, memory_index);
     exports.export("realloc", ExportKind::Func, realloc_func_index);
     exports.export("clear", ExportKind::Func, clear_func_index);
-    exports.export(&config.export_func_name, ExportKind::Func, template_func_index);
+    exports.export(
+        &config.export_func_name,
+        ExportKind::Func,
+        template_func_index,
+    );
 
     // Construct a module in the required order
     let mut module = Module::new();
@@ -69,17 +73,4 @@ pub fn gen_module(config: &Config, file_data: &FileData, params: &Vec<&str>) -> 
     module
 }
 
-fn gen_data(file_data: &FileData) -> (DataCountSection, DataSection) {
-    let mut data = DataSection::new();
-    let mut count = 0;
 
-    for (_span, node) in file_data.contents.iter() {
-        if let Node::Text { text } = node {
-            data.passive(text.bytes());
-            count += 1;
-        }
-    }
-
-    let count = DataCountSection { count };
-    (count, data)
-}

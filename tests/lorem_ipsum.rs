@@ -5,7 +5,7 @@ const LOREM_IPSUM: &'static str = "Lorem ipsum dolor sit amet, consectetur adipi
 use std::sync::Arc;
 
 use miette::{NamedSource, SourceSpan};
-use template_compiler::{gen_component, Config as CompilerConfig, FileData, Node};
+use template_compiler::{gen_component, Config as CompilerConfig, FileData, Node, M, TemplateGenerator, Params};
 
 use anyhow::Result;
 
@@ -14,19 +14,22 @@ use wasmtime::{
     Config, Engine, Store,
 };
 
-use wasmtime_component_macro::bindgen;
+mod bindings {
+    use wasmtime_component_macro::bindgen;
 
-bindgen!({
-    inline: "
-        package template:lorem-ipsum
+    bindgen!({
+        inline: "
+            package template:lorem-ipsum
+    
+            world template {
+                record params {}
+    
+                export apply: func(param: params) -> string
+            }
+        "
+    });
+}
 
-        world template {
-            record params {}
-
-            export apply: func(param: params) -> string
-        }
-    "
-});
 
 #[test]
 fn test_lorem_ipsum() -> Result<()> {
@@ -34,12 +37,15 @@ fn test_lorem_ipsum() -> Result<()> {
         export_func_name: "apply".into(),
     };
     let span = SourceSpan::from((0, LOREM_IPSUM.len()));
+    let text = M::new(LOREM_IPSUM, span);
     let file_data = FileData {
         source: Arc::new(NamedSource::new("lorem-ipsum.txt", LOREM_IPSUM)),
-        contents: vec![(span, Node::Text { text: LOREM_IPSUM })],
+        contents: vec![Node::Text { index: 0, text }],
     };
 
-    let component = gen_component(&compiler_config, &file_data);
+    let params = Params::new(&file_data.contents);
+    let template = TemplateGenerator::new(params, &file_data);
+    let component = gen_component(&compiler_config, &template);
     let component_bytes = component.finish();
 
     // let component_ast = wasmprinter::print_bytes(&component_bytes).unwrap();
@@ -53,9 +59,9 @@ fn test_lorem_ipsum() -> Result<()> {
 
     let linker = Linker::new(&engine);
     let mut store = Store::new(&engine, ());
-    let (lorem_ipsum, _) = Template::instantiate(&mut store, &component, &linker)?;
+    let (lorem_ipsum, _) = bindings::Template::instantiate(&mut store, &component, &linker)?;
 
-    let params = Params {};
+    let params = bindings::Params {};
     let result = lorem_ipsum.call_apply(&mut store, params)?;
 
     assert_eq!(result, LOREM_IPSUM);

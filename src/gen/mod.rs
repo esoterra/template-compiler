@@ -1,3 +1,3 @@
 pub mod component;
 mod module;
-mod template;
+pub mod template;

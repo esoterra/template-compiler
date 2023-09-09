@@ -23,6 +23,7 @@ mod bindings {
                 record params {
                     content: string,
                     title: string,
+                    include-footer: bool,
                 }
 
                 export apply: func(param: params) -> string
@@ -39,8 +40,12 @@ const TEMPLATE: &'static str = "
     <title>{{ title }}</title>
 </head>
 <body>
-    <h1>{{title}}</h1>
+    <h1>{{title }}</h1>
     {{ content }}
+
+    {% if include_footer %}
+    Thanks!!
+    {% endif %}
 </body>
 </html>
 ";
@@ -81,12 +86,16 @@ fn test_website() -> Result<()> {
 <body>
     <h1>{}</h1>
     {}
+
+    
+    Thanks!!
+    
 </body>
 </html>
 ",
         title, title, content
     );
-    let params = bindings::Params { title, content };
+    let params = bindings::Params { title, content, include_footer: true };
     let result = website.call_apply(&mut store, params)?;
 
     assert_eq!(result, expected);
