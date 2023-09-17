@@ -7,11 +7,12 @@ that prints out the entire template input.
 
 Features will be progressively added, tentatively in this order:
 
-1. Parameter interpolation
-2. Conditional rendering
-3. Repeated Rendering
-4. Filters
-5. Async/streams?
+- [x] Parameter interpolation
+- [x] Conditional rendering
+- [ ] Repeated rendering
+- [ ] Dotted/nested parameter names
+- [ ] Filters
+- [ ] Async/streams?
 
 ## Try it out
 
