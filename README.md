@@ -21,3 +21,8 @@ Invoke the compiler like this to generate a component for a template.
 ```sh
 cargo run -- -i <input-path> -o <destination-path>
 ```
+
+## Examples
+
+The best examples are currently the [runtime tests](https://github.com/esoterra/template-compiler/tree/main/tests),
+with the most interesting one being the ["website" test](https://github.com/esoterra/template-compiler/blob/main/tests/website.rs).
