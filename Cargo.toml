@@ -3,12 +3,13 @@ name = "template-compiler"
 description = "A compiler from a simple template language to Wasm components"
 keywords = ["compiler", "webassembly", "wasm"]
 categories = ["compilers", "parser-implementations", "template-engine", "wasm"]
+repository = "https://github.com/esoterra/template-compiler"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
-authors = ["Kyle Brown"]
+authors = ["Robin Brown"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
