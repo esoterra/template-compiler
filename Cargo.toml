@@ -3,6 +3,7 @@ name = "template-compiler"
 description = "A compiler from a simple template language to Wasm components"
 keywords = ["compiler", "webassembly", "wasm"]
 categories = ["compilers", "parser-implementations", "template-engine", "wasm"]
+repository = "https://github.com/esoterra/template-compiler"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 
