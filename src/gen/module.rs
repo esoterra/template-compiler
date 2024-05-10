@@ -24,6 +24,7 @@ pub fn gen_module(config: &Config, template: &TemplateGenerator) -> Module {
         maximum: None,
         memory64: false,
         shared: false,
+        page_size_log2: None,
     };
     let memory_index = 0;
     imports.import("allocator", "memory", EntityType::Memory(memory_type));

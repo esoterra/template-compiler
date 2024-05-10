@@ -17,12 +17,11 @@ anyhow = "1.0"
 clap = { version = "4.0", features = ["derive"] }
 miette = { version = "5.5", features = ["fancy"] }
 thiserror = "1.0"
-wasm-encoder = "0.29.0"
-wat = "1.0"
-wit-parser = "0.8"
+wasm-encoder = "0.207"
+wat = "1.207"
+wit-parser = "0.207"
 
 [dev-dependencies]
-wasmprinter = "0.2"
-wasmtime = { version = "10.0", features = ["component-model"]}
-wasmtime-component-macro = "10.0"
+wasmprinter = "0.207"
+wasmtime = "20"
 pretty_assertions = "1.1.0"
