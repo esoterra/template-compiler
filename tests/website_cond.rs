@@ -13,11 +13,11 @@ use wasmtime::{
 };
 
 mod bindings {
-    use wasmtime_component_macro::bindgen;
+    use wasmtime::component::bindgen;
 
     bindgen!({
         inline: "
-            package template:website
+            package template:website;
 
             world website {
                 record params {
@@ -26,7 +26,7 @@ mod bindings {
                     include-footer: bool,
                 }
 
-                export apply: func(param: params) -> string
+                export apply: func(param: params) -> string;
             }
         ",
 
@@ -40,7 +40,7 @@ const TEMPLATE: &'static str = "
     <title>{{ title }}</title>
 </head>
 <body>
-    <h1>{{title }}</h1>
+    <h1>{{ title }}</h1>
     {{ content }}
 
     {% if include_footer %}
@@ -95,8 +95,10 @@ fn test_website() -> Result<()> {
 ",
         title, title, content
     );
+    let title = title.to_owned();
+    let content = content.to_owned();
     let params = bindings::Params { title, content, include_footer: true };
-    let result = website.call_apply(&mut store, params)?;
+    let result = website.call_apply(&mut store, &params)?;
 
     assert_eq!(result, expected);
 
