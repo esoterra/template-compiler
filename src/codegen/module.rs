@@ -10,9 +10,9 @@ use super::template::TemplateGenerator;
 pub fn gen_module(config: &Config, template: &TemplateGenerator) -> Module {
     // Create a type entry for the `apply` function's type
     let mut types = TypeSection::new();
-    types.function(vec![ValType::I32; 4], vec![ValType::I32; 1]);
+    types.ty().function(vec![ValType::I32; 4], vec![ValType::I32; 1]);
     let realloc_type_index = 0;
-    types.function(vec![], vec![]);
+    types.ty().function(vec![], vec![]);
     let clear_type_index = 1;
     template.gen_core_type(&mut types);
     let template_type_index = 2;

@@ -7,8 +7,8 @@ repository = "https://github.com/esoterra/template-compiler"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 
-version = "0.1.1"
-edition = "2021"
+version = "0.1.2"
+edition = "2024"
 authors = ["Robin Brown"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -18,11 +18,11 @@ anyhow = "1.0"
 clap = { version = "4.0", features = ["derive"] }
 miette = { version = "5.5", features = ["fancy"] }
 thiserror = "1.0"
-wasm-encoder = "0.207"
-wat = "1.207"
-wit-parser = "0.207"
+wasm-encoder = "0.245"
+wat = "1.245"
+wit-parser = "0.245"
 
 [dev-dependencies]
-wasmprinter = "0.207"
-wasmtime = "20"
+wasmprinter = "0.245"
+wasmtime = "42"
 pretty_assertions = "1.1.0"

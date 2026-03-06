@@ -66,7 +66,7 @@ fn test_website() -> Result<()> {
 
     let linker = Linker::new(&engine);
     let mut store = Store::new(&engine, ());
-    let (website, _) = bindings::Website::instantiate(&mut store, &component, &linker)?;
+    let website = bindings::Website::instantiate(&mut store, &component, &linker)?;
 
     let title = "What is WebAssembly (Wasm)?";
     let content =

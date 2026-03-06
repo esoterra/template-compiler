@@ -207,7 +207,7 @@ impl<'source> TemplateGenerator<'source> {
     pub fn gen_core_type(&self, types: &mut TypeSection) {
         let params = vec![ValType::I32; self.arguments_len() as usize];
         let results = vec![ValType::I32];
-        types.function(params, results);
+        types.ty().function(params, results);
     }
 
     pub fn gen_data(&self) -> (DataCountSection, DataSection) {

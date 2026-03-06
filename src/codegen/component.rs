@@ -69,7 +69,7 @@ pub fn gen_component(config: &Config, template: &TemplateGenerator) -> Component
     types
         .function()
         .params([("params", ComponentValType::Type(params_export_index))])
-        .result(ComponentValType::Primitive(PrimitiveValType::String));
+        .result(Some(ComponentValType::Primitive(PrimitiveValType::String)));
     let apply_type_index = 2;
     component.section(&types);
 
