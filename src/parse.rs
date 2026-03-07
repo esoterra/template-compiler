@@ -1,122 +1,173 @@
-use std::{sync::Arc, iter::Peekable};
+use anyhow::{Result, anyhow};
+use chumsky::{prelude::*, text::whitespace};
 
-use anyhow::Result;
-use miette::{NamedSource, SourceSpan};
+const ALPHABET_LOWER: &'static str = "abcdefghijklmnopqrstuvwxyz";
+const ALPHABET_UPPER: &'static str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const ALPHANUM_LOWER: &'static str = "abcdefghijklmnopqrstuvwxyz01234567890";
+const ALPHANUM_UPPER: &'static str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890";
 
-use crate::tokens::{Token, Tokenizer};
-
-#[derive(Debug)]
-pub struct M<T> {
-    pub span: SourceSpan,
-    pub value: T,
-}
-
-impl<T> M<T> {
-    pub fn new(value: T, span: SourceSpan) -> Self {
-        M { span, value }
-    }
-}
-
-#[derive(Debug)]
-pub struct FileData<'source> {
-    pub source: Arc<NamedSource>,
-    pub contents: Vec<Node<'source>>,
-}
-
-#[derive(Debug)]
-pub enum Node<'source> {
+#[derive(Debug, PartialEq, Eq)]
+pub enum Node<'src> {
     Text {
-        index: usize,
-        text: M<&'source str>,
+        text: &'src str,
     },
     Parameter {
-        name: M<&'source str>,
+        name: &'src str,
     },
     Conditional {
-        if_kwd: SourceSpan,
-        cond_ident: M<&'source str>,
-        contents: Vec<Node<'source>>,
-        endif_kwd: SourceSpan,
+        cond_ident: &'src str,
+        contents: Vec<Node<'src>>,
     },
 }
 
-pub fn parse_file<'source>(
-    source: Arc<NamedSource>,
-    text: &'source str,
-) -> Result<FileData<'source>> {
-    let tokens = Tokenizer::new(source.clone(), text).tokenize()?;
-    let mut token_iter = tokens.into_iter().peekable();
+fn parser<'src>() -> impl Parser<'src, &'src str, Vec<Node<'src>>, extra::Err<Rich<'src, char>>> {
+    // Create parser for kebab-case identifier
+    let first_word = one_of(ALPHABET_LOWER)
+        .then(one_of(ALPHANUM_LOWER).repeated())
+        .ignored();
+    let first_acronym = one_of(ALPHABET_UPPER)
+        .then(one_of(ALPHANUM_UPPER).repeated())
+        .ignored();
+    let first_fragment = choice((first_word, first_acronym));
 
-    let contents = parse_tokens(source.clone(), &mut token_iter)?;
+    let word = one_of(ALPHANUM_LOWER).repeated().at_least(1).ignored();
+    let acronym = one_of(ALPHANUM_UPPER).repeated().at_least(1).ignored();
+    let fragment = choice((word, acronym));
 
-    Ok(FileData { source, contents })
+    let label = first_fragment
+        .then(just("-").then(fragment).repeated())
+        .to_slice()
+        .labelled("Label (identifier)");
+
+    // Define block delimiters
+    let open_expr = just("{{").labelled("Start of expression");
+    let close_expr = just("}}").labelled("End of expression");
+
+    let open_statement = just("{%").labelled("Start of statement");
+    let close_statement = just("%}").labelled("End of statement");
+
+    let open_comment = just("{#").labelled("Start of comment");
+    let close_comment = just("#}").labelled("End of comment");
+
+    let plain_open_brace = just("{").then(none_of("{%#")).ignored().labelled(
+        "Template text token beginning with \"{\" (must not match \"{{\", \"{%\", or \"{#\")",
+    );
+    let plain_close_brace = just("}")
+        .then(none_of("}"))
+        .ignored()
+        .labelled("Template text token beginning with \"}\" (must not match \"}}\")");
+    let plain_percent = just("%")
+        .then(none_of("}"))
+        .ignored()
+        .labelled("Template text token beginning with \"%\" (must not match \"%}\")");
+    let plain_hash = just("#")
+        .then(none_of("}"))
+        .ignored()
+        .labelled("Template text token beginning with \"#\" (must not match \"#}\")");
+
+    // Basic text block
+    let text_token = choice((
+        none_of("{}%#").ignored(),
+        plain_open_brace,
+        plain_close_brace,
+        plain_percent,
+        plain_hash,
+    ));
+
+    let text = text_token
+        .repeated()
+        .at_least(1)
+        .to_slice()
+        .map(|text| Node::Text { text })
+        .labelled("Template text")
+        .boxed();
+
+    // Expressions
+    let param_expression = label
+        .clone()
+        .map(|name| Node::Parameter { name })
+        .labelled("Parameter expression");
+    let expression = param_expression
+        .padded()
+        .delimited_by(open_expr, close_expr)
+        .labelled("Expression")
+        .boxed();
+
+    // Statements
+    let condition_expression = label.labelled("Condition expression");
+    let if_start = just("if")
+        .ignore_then(whitespace())
+        .ignore_then(condition_expression)
+        .padded()
+        .delimited_by(open_statement, close_statement)
+        .labelled("Start of 'if' statement")
+        .boxed();
+    let if_end = just("endif")
+        .padded()
+        .delimited_by(open_statement, close_statement)
+        .labelled("Start of 'if' statement")
+        .boxed();
+
+    // Comments
+    let comment_contents = choice((none_of("#").ignored(), plain_hash))
+        .repeated()
+        .ignored();
+    let comment = open_comment
+        .ignore_then(comment_contents)
+        .ignore_then(close_comment)
+        .ignored()
+        .labelled("Comment");
+
+    let template_block = recursive(|template| {
+        let statement = if_start
+            .then(template.padded_by(comment.repeated()).repeated().collect())
+            .map(|(cond_ident, contents)| Node::Conditional {
+                cond_ident,
+                contents,
+            })
+            .then_ignore(if_end)
+            .labelled("If statement")
+            .boxed();
+        choice((text, expression, statement)).labelled("Template block")
+    });
+
+    template_block
+        .padded_by(comment.repeated())
+        .repeated()
+        .collect()
+        .then_ignore(end())
 }
 
-fn parse_tokens<'source, Iter>(source: Arc<NamedSource>, token_iter: &mut Peekable<Iter>) -> Result<Vec<Node<'source>>>
-where
-    Iter: Iterator<Item = (SourceSpan, Token<'source>)>,
-{
-    let mut contents = Vec::new();
+pub fn parse_template<'src>(name: &str, input: &'src str) -> Result<Vec<Node<'src>>> {
+    let parser = parser();
+    let (output, errors) = parser.parse(input).into_output_errors();
 
-    while let Some((span, token)) = token_iter.next() {
-        match token {
-            Token::CommandStart => {
-                if token_iter.peek().unwrap().1 == Token::EndIf {
-                    return Ok(contents);
-                }
-
-                let if_kwd = match_token(token_iter, Token::If)?;
-                let cond_ident = match_ident(token_iter)?;
-                match_token(token_iter, Token::CommandEnd)?;
-
-                let if_contents = parse_tokens(source.clone(), token_iter)?;
-
-                let endif_kwd = match_token(token_iter, Token::EndIf)?;
-                match_token(token_iter, Token::CommandEnd)?;
-
-                contents.push(Node::Conditional {
-                    if_kwd,
-                    cond_ident,
-                    contents: if_contents,
-                    endif_kwd,
-                })
-            }
-            Token::ParamStart => {
-                let name = match_ident(token_iter)?;
-                contents.push(Node::Parameter { name });
-                match_token(token_iter, Token::ParamEnd)?;
-            }
-            Token::Text { index, text } => {
-                contents.push(Node::Text {
-                    index,
-                    text: M::new(text, span),
-                });
-            }
-            _ => todo!(),
-        }
+    for error in errors {
+        println!("{name}: {error:?}");
     }
 
-    Ok(contents)
+    output.ok_or_else(|| anyhow!("Failed to parse template"))
 }
 
-fn match_token<'source, Iter>(token_iter: &mut Iter, token: Token<'source>) -> Result<SourceSpan>
-where
-    Iter: Iterator<Item = (SourceSpan, Token<'source>)>,
-{
-    match token_iter.next() {
-        Some((span, t)) if t == token => Ok(span),
-        Some(st) => { dbg!(st); todo!() },
-        None => todo!("error"),
-    }
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-fn match_ident<'source, Iter>(token_iter: &mut Iter) -> Result<M<&'source str>>
-where
-    Iter: Iterator<Item = (SourceSpan, Token<'source>)>,
-{
-    match token_iter.next() {
-        Some((span, Token::Identifier { name })) => Ok(M::new(name, span)),
-        Some(_) => todo!("error"),
-        None => todo!("error"),
+    #[test]
+    fn comments_are_skipped() {
+        // Comments in root
+        let input = "{# asdlfa #}foo{# asdlkj #}{##}";
+        let template = parse_template("comments_are_skipped:1", input).unwrap();
+        assert_eq!(vec![Node::Text { text: "foo" }], template);
+        // Comments in if
+        let input = "{% if foo %}{# asdlfa #}foo{# asdlkj #}{##}{% endif %}";
+        let template = parse_template("comments_are_skipped:2", input).unwrap();
+        assert_eq!(
+            vec![Node::Conditional {
+                cond_ident: "foo",
+                contents: vec![Node::Text { text: "foo" }]
+            }],
+            template
+        );
     }
 }

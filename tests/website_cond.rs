@@ -1,15 +1,14 @@
 /// Generates a template component for a simple website
-use std::sync::Arc;
-
-use miette::NamedSource;
 use pretty_assertions::assert_eq;
-use template_compiler::{gen_component, parse_file, Config as CompilerConfig, TemplateGenerator, Params};
+use template_compiler::{
+    Config as CompilerConfig, Params, TemplateGenerator, gen_component, parse_template,
+};
 
 use anyhow::Result;
 
 use wasmtime::{
-    component::{Component, Linker},
     Config, Engine, Store,
+    component::{Component, Linker},
 };
 
 mod bindings {
@@ -43,7 +42,7 @@ const TEMPLATE: &'static str = "
     <h1>{{ title }}</h1>
     {{ content }}
 
-    {% if include_footer %}
+    {% if include-footer %}
     Thanks!!
     {% endif %}
 </body>
@@ -55,11 +54,10 @@ fn test_website() -> Result<()> {
     let compiler_config = CompilerConfig {
         export_func_name: "apply".into(),
     };
-    let source = Arc::new(NamedSource::new("website.html", TEMPLATE));
-    let file_data = parse_file(source, TEMPLATE).unwrap();
+    let ast = parse_template("website-cond.html", TEMPLATE).unwrap();
 
-    let params = Params::new(&file_data.contents);
-    let template = TemplateGenerator::new(params, &file_data);
+    let params = Params::new(&ast);
+    let template = TemplateGenerator::new(params, &ast);
     let component = gen_component(&compiler_config, &template);
     let component_bytes = component.finish();
 
@@ -97,7 +95,11 @@ fn test_website() -> Result<()> {
     );
     let title = title.to_owned();
     let content = content.to_owned();
-    let params = bindings::Params { title, content, include_footer: true };
+    let params = bindings::Params {
+        title,
+        content,
+        include_footer: true,
+    };
     let result = website.call_apply(&mut store, &params)?;
 
     assert_eq!(result, expected);

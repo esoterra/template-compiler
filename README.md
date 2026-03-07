@@ -38,7 +38,7 @@ I don't currently have time to dedicate to the project, but I would like to add 
     <h1>{{ title }}</h1>
     {{ content }}
 
-    {% if include_footer %}
+    {% if include-footer %}
     Thanks!!
     {% endif %}
 </body>

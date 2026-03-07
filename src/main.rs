@@ -1,10 +1,9 @@
-use std::{fs, path::PathBuf, sync::Arc};
+use std::{fs, path::PathBuf};
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use miette::NamedSource;
 
-use template_compiler::{gen_component, parse_file, Config, TemplateGenerator, Params};
+use template_compiler::{Config, Params, TemplateGenerator, gen_component, parse_template};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -35,11 +34,9 @@ fn main() -> Result<()> {
 
     let text = fs::read_to_string(args.input)?;
 
-    let source = Arc::new(NamedSource::new(name, text.clone()));
-
-    let file_data = parse_file(source, &text)?;
-    let params = Params::new(&file_data.contents);
-    let template = TemplateGenerator::new(params, &file_data);
+    let ast = parse_template(&name, &text)?;
+    let params = Params::new(&ast);
+    let template = TemplateGenerator::new(params, &ast);
     let component = gen_component(&config, &template);
     fs::write(args.output, component.finish().as_slice())?;
 

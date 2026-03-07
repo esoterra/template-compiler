@@ -1,6 +1,6 @@
 use wasm_encoder::{
-    CodeSection, EntityType, ExportKind, ExportSection,
-    FunctionSection, ImportSection, MemoryType, Module, TypeSection, ValType,
+    CodeSection, EntityType, ExportKind, ExportSection, FunctionSection, ImportSection, MemoryType,
+    Module, TypeSection, ValType,
 };
 
 use crate::Config;
@@ -10,7 +10,9 @@ use super::template::TemplateGenerator;
 pub fn gen_module(config: &Config, template: &TemplateGenerator) -> Module {
     // Create a type entry for the `apply` function's type
     let mut types = TypeSection::new();
-    types.ty().function(vec![ValType::I32; 4], vec![ValType::I32; 1]);
+    types
+        .ty()
+        .function(vec![ValType::I32; 4], vec![ValType::I32; 1]);
     let realloc_type_index = 0;
     types.ty().function(vec![], vec![]);
     let clear_type_index = 1;
@@ -73,5 +75,3 @@ pub fn gen_module(config: &Config, template: &TemplateGenerator) -> Module {
     // Return the constructed module and export index for the `apply` function
     module
 }
-
-

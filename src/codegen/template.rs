@@ -1,19 +1,31 @@
 use std::collections::HashSet;
 
 use wasm_encoder::{
-    DataCountSection, DataSection, Function, Instruction, MemArg, TypeSection, ValType, ComponentTypeSection, PrimitiveValType, ComponentValType, BlockType,
+    BlockType, ComponentTypeSection, ComponentValType, DataCountSection, DataSection, Function,
+    Instruction, MemArg, PrimitiveValType, TypeSection, ValType,
 };
 
-use crate::{parse::Node, FileData};
+use crate::parse::Node;
 
 const REALLOC_FUNC_INDEX: u32 = 0;
 const MEMORY_INDEX: u32 = 0;
 
 const MAX_FLAT_PARAMS: u32 = 16;
 
-pub struct TemplateGenerator<'source> {
+#[derive(Debug, Default, Clone, Copy)]
+struct Counter(u32);
+
+impl Counter {
+    fn increment(&mut self) -> u32 {
+        let v = self.0;
+        self.0 += 1;
+        v
+    }
+}
+
+pub struct TemplateGenerator<'source, 'ast> {
     params: Params<'source>,
-    file_data: &'source FileData<'source>,
+    template: &'ast Vec<Node<'source>>,
 }
 
 pub struct Params<'source> {
@@ -46,15 +58,13 @@ impl<'source> Params<'source> {
         match node {
             Node::Text { .. } => {}
             Node::Parameter { name } => {
-                text_params.insert(name.value);
+                text_params.insert(name);
             }
             Node::Conditional {
-                if_kwd: _,
                 cond_ident,
                 contents,
-                endif_kwd: _,
             } => {
-                cond_params.insert(cond_ident.value);
+                cond_params.insert(cond_ident);
                 for node in contents {
                     Self::collect_params(node, text_params, cond_params);
                 }
@@ -89,23 +99,23 @@ impl<'source> Params<'source> {
     }
 
     // The index in the parameters of a given condition parameter name
-    pub fn cond_param_index(&self, param: &str) -> usize {
-        self.cond_params.binary_search(&param).unwrap()
+    pub fn cond_param_index(&self, param: &str) -> u32 {
+        self.cond_params.binary_search(&param).unwrap() as u32
     }
 
     pub fn record_type(&self) -> ComponentTypeSection {
         let mut types = ComponentTypeSection::new();
-        let converted_names: Vec<String> = self.text_params.iter().map(|param: &&str| snake_to_kebab(param)).collect();
-        let text_fields = converted_names.iter().map(|param| {
+        let text_fields = self
+            .text_params.iter().map(|param| {
             (
-                param.as_str(),
+                param.to_owned(),
                 ComponentValType::Primitive(PrimitiveValType::String),
             )
         });
-        let converted_names: Vec<String> = self.cond_params.iter().map(|param: &&str| snake_to_kebab(param)).collect();
-        let cond_fields = converted_names.iter().map(|param| {
+        let cond_fields = self
+            .cond_params.iter().map(|param| {
             (
-                param.as_str(),
+                param.to_owned(),
                 ComponentValType::Primitive(PrimitiveValType::Bool),
             )
         });
@@ -121,7 +131,7 @@ impl<'source> Params<'source> {
     fn gen_push_text_len(&self, func: &mut Function, text_index: u32) {
         self.gen_push_text_field(func, text_index, 1)
     }
-    
+
     fn gen_push_text_field(&self, func: &mut Function, text_index: u32, field: u32) {
         if self.must_spill() {
             // push params offset
@@ -167,9 +177,9 @@ impl<'source> Params<'source> {
     }
 }
 
-impl<'source> TemplateGenerator<'source> {
-    pub fn new(params: Params<'source>, file_data: &'source FileData<'source>) -> Self {
-        Self { params, file_data }
+impl<'source, 'ast> TemplateGenerator<'source, 'ast> {
+    pub fn new(params: Params<'source>, template: &'ast Vec<Node<'source>>) -> Self {
+        Self { params, template }
     }
 
     pub fn params(&self) -> &Params<'source> {
@@ -214,7 +224,7 @@ impl<'source> TemplateGenerator<'source> {
         let mut count = 0;
         let mut data = DataSection::new();
 
-        for node in self.file_data.contents.iter() {
+        for node in self.template.iter() {
             Self::collect_data(node, &mut count, &mut data);
         }
 
@@ -224,16 +234,14 @@ impl<'source> TemplateGenerator<'source> {
 
     fn collect_data(node: &Node<'source>, count: &mut u32, data: &mut DataSection) {
         match node {
-            Node::Text { index: _, text } => {
-                data.passive(text.value.bytes());
+            Node::Text { text } => {
+                data.passive(text.bytes());
                 *count += 1;
             }
             Node::Parameter { name: _ } => {}
             Node::Conditional {
-                if_kwd: _,
                 cond_ident: _,
                 contents,
-                endif_kwd: _,
             } => {
                 for node in contents {
                     Self::collect_data(node, count, data);
@@ -250,7 +258,8 @@ impl<'source> TemplateGenerator<'source> {
         self.gen_calculate_len(&mut func);
         self.gen_allocate_results(&mut func);
         self.gen_init_cursor(&mut func);
-        self.gen_write_template(&mut func);
+        let mut c = Counter::default();
+        self.gen_write_template(&mut c, &mut func);
 
         func.instruction(&Instruction::LocalGet(self.return_area_local()));
         func.instruction(&Instruction::End);
@@ -258,7 +267,7 @@ impl<'source> TemplateGenerator<'source> {
     }
 
     fn gen_calculate_len(&self, func: &mut Function) {
-        self.gen_calculate_sequence_len(func, self.file_data.contents.as_slice());
+        self.gen_calculate_sequence_len(func, self.template.as_slice());
         // Store the calculated length
         func.instruction(&Instruction::LocalSet(self.result_len_local()));
     }
@@ -269,20 +278,18 @@ impl<'source> TemplateGenerator<'source> {
         let mut prior_exists = false;
         for node in sequence.iter() {
             match node {
-                Node::Text { index: _, text } => {
-                    base_length += text.value.len() as i32;
+                Node::Text { text } => {
+                    base_length += text.len() as i32;
                 }
                 Node::Parameter { name } => {
-                    let index = self.params.text_param_index(&name.value);
+                    let index = self.params.text_param_index(&name);
                     param_counts[index] += 1;
                 }
                 Node::Conditional {
-                    if_kwd: _,
                     cond_ident,
                     contents,
-                    endif_kwd: _,
                 } => {
-                    let cond_index = self.params.cond_param_index(cond_ident.value) as u32;
+                    let cond_index = self.params.cond_param_index(cond_ident);
 
                     self.params.gen_push_cond(func, cond_index);
                     func.instruction(&Instruction::If(BlockType::Result(ValType::I32)));
@@ -365,37 +372,40 @@ impl<'source> TemplateGenerator<'source> {
         func.instruction(&Instruction::LocalSet(self.result_cursor_local()));
     }
 
-    fn gen_write_template(&self, func: &mut Function) {
-        self.gen_write_sequence_template(func, &self.file_data.contents);
+    fn gen_write_template(&self, c: &mut Counter, func: &mut Function) {
+        self.gen_write_sequence_template(c, func, &self.template);
     }
 
-    fn gen_write_sequence_template(&self, func: &mut Function, sequence: &[Node<'source>]) {
+    fn gen_write_sequence_template(
+        &self,
+        c: &mut Counter,
+        func: &mut Function,
+        sequence: &[Node<'source>],
+    ) {
         for node in sequence {
             // note both branches end by pushing the cursor shift
             match node {
-                Node::Text { index, text } => {
-                    self.gen_write_segment(func, *index as u32, text.value.len() as i32);
+                Node::Text { text } => {
+                    self.gen_write_segment(func, c.increment(), text.len() as i32);
                 }
                 Node::Parameter { name } => {
-                    let index = self.params.text_param_index(&name.value);
-                    self.gen_write_param(func, index as u32);
+                    let index = self.params.text_param_index(&name) as u32;
+                    self.gen_write_param(func, index);
                 }
                 Node::Conditional {
-                    if_kwd: _,
                     cond_ident,
                     contents,
-                    endif_kwd: _,
                 } => {
-                    let cond_index = self.params.cond_param_index(cond_ident.value) as u32;
+                    let cond_index = self.params.cond_param_index(cond_ident);
 
                     self.params.gen_push_cond(func, cond_index);
                     func.instruction(&Instruction::If(BlockType::Empty));
-                    self.gen_write_sequence_template(func, contents);
+                    self.gen_write_sequence_template(c, func, contents);
                     func.instruction(&Instruction::Else);
                     func.instruction(&Instruction::End);
                 }
             }
-            
+
             if matches!(node, Node::Text { .. }) || matches!(node, Node::Parameter { .. }) {
                 // push cursor and add to shift
                 func.instruction(&Instruction::LocalGet(self.result_cursor_local()));
@@ -435,8 +445,4 @@ impl<'source> TemplateGenerator<'source> {
         // push length
         self.params.gen_push_text_len(func, param_index);
     }
-}
-
-fn snake_to_kebab(ident: &str) -> String {
-    ident.replace("_", "-")
 }

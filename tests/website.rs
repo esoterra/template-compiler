@@ -1,15 +1,14 @@
 /// Generates a template component for a simple website
-use std::sync::Arc;
-
-use miette::NamedSource;
 use pretty_assertions::assert_eq;
-use template_compiler::{gen_component, parse_file, Config as CompilerConfig, TemplateGenerator, Params};
+use template_compiler::{
+    Config as CompilerConfig, Params, TemplateGenerator, gen_component, parse_template,
+};
 
 use anyhow::Result;
 
 use wasmtime::{
-    component::{Component, Linker},
     Config, Engine, Store,
+    component::{Component, Linker},
 };
 
 mod bindings {
@@ -50,11 +49,9 @@ fn test_website() -> Result<()> {
     let compiler_config = CompilerConfig {
         export_func_name: "apply".into(),
     };
-    let source = Arc::new(NamedSource::new("website.html", TEMPLATE));
-    let file_data = parse_file(source, TEMPLATE).unwrap();
-
-    let params = Params::new(&file_data.contents);
-    let template = TemplateGenerator::new(params, &file_data);
+    let ast = parse_template("website.html", TEMPLATE).unwrap();
+    let params = Params::new(&ast);
+    let template = TemplateGenerator::new(params, &ast);
     let component = gen_component(&compiler_config, &template);
     let component_bytes = component.finish();
 
