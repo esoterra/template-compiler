@@ -1,4 +1,5 @@
 use anyhow::{Result, anyhow};
+use ariadne::{Color, Label, Report, ReportKind, sources};
 use chumsky::{prelude::*, text::whitespace};
 
 const ALPHABET_LOWER: &'static str = "abcdefghijklmnopqrstuvwxyz";
@@ -22,48 +23,53 @@ pub enum Node<'src> {
 
 fn parser<'src>() -> impl Parser<'src, &'src str, Vec<Node<'src>>, extra::Err<Rich<'src, char>>> {
     // Create parser for kebab-case identifier
-    let first_word = one_of(ALPHABET_LOWER)
-        .then(one_of(ALPHANUM_LOWER).repeated())
+    let alphabet_lower = one_of(ALPHABET_LOWER).labelled("lowercase letter (a-z)");
+    let alphabet_upper = one_of(ALPHABET_UPPER).labelled("uppercase letter (A-Z)");
+    let alphanum_lower = one_of(ALPHANUM_LOWER).labelled("lowercase letter or digit (a-z, 0-9)");
+    let alphanum_upper = one_of(ALPHANUM_UPPER).labelled("uppercase letter or digit (A-Z, 0-9)");
+
+    let first_word = alphabet_lower
+        .then(alphanum_lower.repeated())
         .ignored();
-    let first_acronym = one_of(ALPHABET_UPPER)
-        .then(one_of(ALPHANUM_UPPER).repeated())
+    let first_acronym = alphabet_upper
+        .then(alphanum_upper.repeated())
         .ignored();
     let first_fragment = choice((first_word, first_acronym));
 
-    let word = one_of(ALPHANUM_LOWER).repeated().at_least(1).ignored();
-    let acronym = one_of(ALPHANUM_UPPER).repeated().at_least(1).ignored();
+    let word = alphanum_lower.repeated().at_least(1).ignored();
+    let acronym = alphanum_upper.repeated().at_least(1).ignored();
     let fragment = choice((word, acronym));
 
     let label = first_fragment
         .then(just("-").then(fragment).repeated())
         .to_slice()
-        .labelled("Label (identifier)");
+        .labelled("label (kebab-case identifier)");
 
     // Define block delimiters
-    let open_expr = just("{{").labelled("Start of expression");
-    let close_expr = just("}}").labelled("End of expression");
+    let open_expr = just("{{").labelled("start of expression (\"{{\")");
+    let close_expr = just("}}").labelled("end of expression (\"}}\")");
 
-    let open_statement = just("{%").labelled("Start of statement");
-    let close_statement = just("%}").labelled("End of statement");
+    let open_statement = just("{%").labelled("start of statement (\"{%\")");
+    let close_statement = just("%}").labelled("end of statement (\"%}\")");
 
-    let open_comment = just("{#").labelled("Start of comment");
-    let close_comment = just("#}").labelled("End of comment");
+    let open_comment = just("{#").labelled("start of comment (\"{#\")");
+    let close_comment = just("#}").labelled("end of comment (\"#}\")");
 
     let plain_open_brace = just("{").then(none_of("{%#")).ignored().labelled(
-        "Template text token beginning with \"{\" (must not match \"{{\", \"{%\", or \"{#\")",
+        "template text token beginning with \"{\" (must not match \"{{\", \"{%\", or \"{#\")",
     );
     let plain_close_brace = just("}")
         .then(none_of("}"))
         .ignored()
-        .labelled("Template text token beginning with \"}\" (must not match \"}}\")");
+        .labelled("template text token beginning with \"}\" (must not match \"}}\")");
     let plain_percent = just("%")
         .then(none_of("}"))
         .ignored()
-        .labelled("Template text token beginning with \"%\" (must not match \"%}\")");
+        .labelled("template text token beginning with \"%\" (must not match \"%}\")");
     let plain_hash = just("#")
         .then(none_of("}"))
         .ignored()
-        .labelled("Template text token beginning with \"#\" (must not match \"#}\")");
+        .labelled("template text token beginning with \"#\" (must not match \"#}\")");
 
     // Basic text block
     let text_token = choice((
@@ -79,33 +85,33 @@ fn parser<'src>() -> impl Parser<'src, &'src str, Vec<Node<'src>>, extra::Err<Ri
         .at_least(1)
         .to_slice()
         .map(|text| Node::Text { text })
-        .labelled("Template text")
+        .labelled("template text")
         .boxed();
 
     // Expressions
     let param_expression = label
         .clone()
         .map(|name| Node::Parameter { name })
-        .labelled("Parameter expression");
+        .labelled("parameter name (starts with a-z or A-Z)");
     let expression = param_expression
         .padded()
         .delimited_by(open_expr, close_expr)
-        .labelled("Expression")
+        .labelled("expression")
         .boxed();
 
     // Statements
-    let condition_expression = label.labelled("Condition expression");
+    let condition_expression = label.labelled("condition expression");
     let if_start = just("if")
         .ignore_then(whitespace())
         .ignore_then(condition_expression)
         .padded()
         .delimited_by(open_statement, close_statement)
-        .labelled("Start of 'if' statement")
+        .labelled("start of 'if' statement")
         .boxed();
     let if_end = just("endif")
         .padded()
         .delimited_by(open_statement, close_statement)
-        .labelled("Start of 'if' statement")
+        .labelled("start of 'if' statement")
         .boxed();
 
     // Comments
@@ -116,7 +122,7 @@ fn parser<'src>() -> impl Parser<'src, &'src str, Vec<Node<'src>>, extra::Err<Ri
         .ignore_then(comment_contents)
         .ignore_then(close_comment)
         .ignored()
-        .labelled("Comment");
+        .labelled("comment");
 
     let template_block = recursive(|template| {
         let statement = if_start
@@ -126,9 +132,9 @@ fn parser<'src>() -> impl Parser<'src, &'src str, Vec<Node<'src>>, extra::Err<Ri
                 contents,
             })
             .then_ignore(if_end)
-            .labelled("If statement")
+            .labelled("if statement")
             .boxed();
-        choice((text, expression, statement)).labelled("Template block")
+        choice((text, expression, statement)).labelled("template block")
     });
 
     template_block
@@ -138,12 +144,27 @@ fn parser<'src>() -> impl Parser<'src, &'src str, Vec<Node<'src>>, extra::Err<Ri
         .then_ignore(end())
 }
 
-pub fn parse_template<'src>(name: &str, input: &'src str) -> Result<Vec<Node<'src>>> {
+pub fn parse_template<'src>(filename: &str, src: &'src str) -> Result<Vec<Node<'src>>> {
     let parser = parser();
-    let (output, errors) = parser.parse(input).into_output_errors();
+    let (output, errors) = parser.parse(src).into_output_errors();
 
-    for error in errors {
-        println!("{name}: {error:?}");
+    for e in errors {
+        Report::build(ReportKind::Error, (filename.to_owned(), e.span().into_range()))
+            .with_config(ariadne::Config::new().with_index_type(ariadne::IndexType::Byte))
+            .with_message(e.to_string())
+            .with_label(
+                Label::new((filename.to_owned(), e.span().into_range()))
+                    .with_message(e.reason().to_string())
+                    .with_color(Color::Red),
+            )
+            .with_labels(e.contexts().map(|(label, span)| {
+                Label::new((filename.to_owned(), span.into_range()))
+                    .with_message(format!("while parsing this {label}"))
+                    .with_color(Color::Yellow)
+            }))
+            .finish()
+            .print(sources([(filename.to_owned(), src)]))
+            .unwrap()
     }
 
     output.ok_or_else(|| anyhow!("Failed to parse template"))
